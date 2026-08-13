@@ -1,0 +1,1 @@
+ALTER TABLE materi ADD COLUMN IF NOT EXISTS tingkat text DEFAULT '';
