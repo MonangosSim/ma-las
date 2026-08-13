@@ -29,6 +29,18 @@ const tingkatBadge: Record<string, string> = {
   XII: "bg-purple-100 text-purple-700",
 };
 
+const tingkatLinkBtn: Record<string, string> = {
+  X: "hover:bg-blue-50",
+  XI: "hover:bg-emerald-50",
+  XII: "hover:bg-amber-50",
+};
+
+const tingkatLinkIcon: Record<string, string> = {
+  X: "text-blue-600",
+  XI: "text-emerald-600",
+  XII: "text-amber-600",
+};
+
 function getFileIcon(name: string) {
   const ext = name.substring(name.lastIndexOf(".")).toLowerCase();
   if (ext === ".pdf") return FileText;
@@ -376,10 +388,10 @@ export default function MateriManager() {
                               href={m.link_url}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="btn-icon hover:bg-blue-50"
+                              className={`btn-icon ${tingkatLinkBtn[m.tingkat || ""] || "hover:bg-slate-50"}`}
                               title="Buka Link"
                             >
-                              <LinkIcon className="w-4 h-4 text-blue-600" />
+                              <LinkIcon className={`w-4 h-4 ${tingkatLinkIcon[m.tingkat || ""] || "text-slate-600"}`} />
                             </a>
                           ) : (
                             <button
