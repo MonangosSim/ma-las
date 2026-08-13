@@ -20,6 +20,12 @@ const tingkatBadge: Record<string, string> = {
   XII: "bg-purple-100 text-purple-700",
 };
 
+const tingkatLinkBtn: Record<string, string> = {
+  X: "bg-blue-500 hover:bg-blue-600",
+  XI: "bg-emerald-500 hover:bg-emerald-600",
+  XII: "bg-amber-500 hover:bg-amber-600",
+};
+
 function getFileIcon(name: string) {
   const ext = name.substring(name.lastIndexOf(".")).toLowerCase();
   if (ext === ".pdf") return FileText;
@@ -184,7 +190,7 @@ export default function SiswaMateri() {
                       href={m.link_url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="btn-primary w-full justify-center"
+                      className={`btn-primary w-full justify-center ${tingkatLinkBtn[m.tingkat || ""] || "bg-slate-600 hover:bg-slate-700"}`}
                     >
                       <LinkIcon className="w-4 h-4" />
                       Buka Link
