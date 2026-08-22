@@ -5,6 +5,7 @@ import type {
   AbsensiBatchResponse,
   AdminStats,
   Kelas,
+  Keaktifan,
   Komite,
   ListResponse,
   MataPelajaran,
@@ -503,5 +504,28 @@ export const api = {
   // ============================================================
   async bulkImportSiswa(data: { siswaList: Record<string, string>[]; kelasMap: Record<string, string> }): Promise<{ success: boolean; inserted: number; updated: number; errors: { row: number; nisn: string; message: string }[]; total: number }> {
     return request("/siswa-bulk", { method: "POST", body: JSON.stringify(data) });
+  },
+
+  // ============================================================
+  // KEAKTIFAN
+  // ============================================================
+  async listKeaktifan(params?: { kelas_id?: string; tahun_ajaran_id?: string; semester?: string }): Promise<ListResponse<Keaktifan>> {
+    const q = new URLSearchParams();
+    if (params?.kelas_id) q.set("kelas_id", params.kelas_id);
+    if (params?.tahun_ajaran_id) q.set("tahun_ajaran_id", params.tahun_ajaran_id);
+    if (params?.semester) q.set("semester", params.semester);
+    return request(`/keaktifan?${q.toString()}`);
+  },
+
+  async upsertKeaktifanBatch(entries: { siswa_id: string; slots: boolean[]; aktif_count: number }[], kelasId: string, tahunAjaranId?: string, semester?: string): Promise<{ success: boolean; saved: number }> {
+    return request("/keaktifan-batch", {
+      method: "POST",
+      body: JSON.stringify({
+        kelas_id: kelasId,
+        tahun_ajaran_id: tahunAjaranId,
+        semester,
+        entries: entries.map((e) => ({ siswa_id: e.siswa_id, slots: e.slots, aktif_count: e.aktif_count })),
+      }),
+    });
   },
 };
