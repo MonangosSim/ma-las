@@ -5,7 +5,7 @@ import { PageHeader, LoadingState, ErrorState, EmptyState } from "../../componen
 import Modal from "../../components/Modal";
 import ConfirmDialog from "../../components/ConfirmDialog";
 import { useTahunAjaran } from "../../context/TahunAjaranContext";
-import { Plus, Pencil, Trash2, Search, Loader2, CalendarRange, Table, Grid3x3 } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, Loader2, CalendarRange, Table, Grid3x3, ArrowUpDown } from "lucide-react";
 
 interface FormState {
   siswa_id: string;
@@ -48,6 +48,7 @@ export default function NilaiManager() {
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [kelasFilter, setKelasFilter] = useState("");
+  const [sortBy, setSortBy] = useState<"nama" | "kelas">("nama");
   const [viewMode, setViewMode] = useState<"pivot" | "list">("pivot");
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Nilai | null>(null);
@@ -61,7 +62,7 @@ export default function NilaiManager() {
     setLoading(true);
     setError("");
     Promise.all([
-      api.listNilai({ search, tahun_ajaran_id: selectedTahunAjaranId, semester: selectedSemester }),
+      api.listNilai({ tahun_ajaran_id: selectedTahunAjaranId, semester: selectedSemester }),
       api.listSiswa(),
       api.listMataPelajaran(),
       api.listKelas(),
@@ -74,7 +75,7 @@ export default function NilaiManager() {
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
-  }, [search, selectedTahunAjaranId, selectedSemester]);
+  }, [selectedTahunAjaranId, selectedSemester]);
 
   useEffect(() => {
     const t = setTimeout(fetchData, 300);
@@ -84,11 +85,23 @@ export default function NilaiManager() {
   const siswaMap = new Map(siswaList.map((s) => [s.id, s]));
   const kelasMap = new Map(kelasList.map((k) => [k.id, k]));
 
-  // Siswa in selected kelas (or all if no filter)
+  // Siswa in selected kelas (or all if no filter), filtered by search, then sorted
   const filteredSiswa = useMemo(() => {
-    if (!kelasFilter) return siswaList;
-    return siswaList.filter((s) => s.kelas_id === kelasFilter);
-  }, [siswaList, kelasFilter]);
+    let result = kelasFilter ? siswaList.filter((s) => s.kelas_id === kelasFilter) : siswaList;
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      result = result.filter((s) => s.nama.toLowerCase().includes(q));
+    }
+    result = [...result].sort((a, b) => {
+      if (sortBy === "kelas") {
+        const ka = kelasMap.get(a.kelas_id || "")?.nama_kelas || "";
+        const kb = kelasMap.get(b.kelas_id || "")?.nama_kelas || "";
+        return ka.localeCompare(kb) || a.nama.localeCompare(b.nama);
+      }
+      return a.nama.localeCompare(b.nama);
+    });
+    return result;
+  }, [siswaList, kelasFilter, search, sortBy, kelasMap]);
 
   const filteredSiswaIds = useMemo(() => new Set(filteredSiswa.map((s) => s.id)), [filteredSiswa]);
 
@@ -96,9 +109,11 @@ export default function NilaiManager() {
   const filteredData = useMemo(() => {
     return data.filter((n) => {
       if (kelasFilter && !filteredSiswaIds.has(n.siswa_id)) return false;
+      const siswa = siswaMap.get(n.siswa_id);
+      if (search.trim() && siswa && !siswa.nama.toLowerCase().includes(search.toLowerCase())) return false;
       return true;
     });
-  }, [data, kelasFilter, filteredSiswaIds]);
+  }, [data, kelasFilter, filteredSiswaIds, search, siswaMap]);
 
   const INFO_MATPEL = "Informatika";
 
@@ -222,11 +237,11 @@ export default function NilaiManager() {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Cari mata pelajaran..."
+              placeholder="Cari nama siswa..."
               className="input-field pl-10"
             />
           </div>
-          <div className="sm:w-56">
+          <div className="sm:w-48">
             <select
               value={kelasFilter}
               onChange={(e) => setKelasFilter(e.target.value)}
@@ -238,6 +253,17 @@ export default function NilaiManager() {
                   {k.nama_kelas}
                 </option>
               ))}
+            </select>
+          </div>
+          <div className="relative sm:w-44">
+            <ArrowUpDown className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as "nama" | "kelas")}
+              className="input-field pl-10"
+            >
+              <option value="nama">Urut: Nama</option>
+              <option value="kelas">Urut: Kelas</option>
             </select>
           </div>
           <div className="flex rounded-lg border border-slate-200 overflow-hidden">
