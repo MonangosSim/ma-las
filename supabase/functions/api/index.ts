@@ -525,6 +525,68 @@ Deno.serve(async (req: Request) => {
     }
 
     // ============================================================
+    // KEAKTIFAN: batch upsert (save 15-slot toggles for a class)
+    // ============================================================
+    if (action === "keaktifan-batch" && req.method === "POST") {
+      const user = await getAuthUser(req);
+      if (!requireAdmin(user)) return jsonResponse({ error: "Akses ditolak" }, 403);
+
+      const { kelas_id, entries, tahun_ajaran_id, semester } = await req.json();
+      if (!kelas_id || !Array.isArray(entries)) {
+        return jsonResponse({ error: "kelas_id dan entries wajib diisi" }, 400);
+      }
+
+      const { data: existing } = await supabase
+        .from("keaktifan")
+        .select("id, siswa_id")
+        .eq("kelas_id", kelas_id)
+        .eq("tahun_ajaran_id", tahun_ajaran_id || null)
+        .eq("semester", semester || "");
+
+      const existingMap = new Map((existing || []).map((k) => [k.siswa_id, k.id]));
+
+      const toInsert: Record<string, unknown>[] = [];
+      const toUpdate: { id: string; body: Record<string, unknown> }[] = [];
+
+      for (const entry of entries) {
+        if (!entry.siswa_id) continue;
+        const slots = Array.isArray(entry.slots) && entry.slots.length === 15
+          ? entry.slots
+          : new Array(15).fill(false);
+        const aktif_count = slots.filter(Boolean).length;
+        const body: Record<string, unknown> = {
+          siswa_id: entry.siswa_id,
+          kelas_id,
+          tahun_ajaran_id: tahun_ajaran_id || null,
+          semester: semester || "",
+          slots,
+          aktif_count,
+          updated_at: new Date().toISOString(),
+        };
+        const existingId = existingMap.get(entry.siswa_id);
+        if (existingId) {
+          toUpdate.push({ id: existingId, body });
+        } else {
+          toInsert.push(body);
+        }
+      }
+
+      let savedCount = 0;
+      if (toInsert.length > 0) {
+        const { error } = await supabase.from("keaktifan").insert(toInsert);
+        if (error) return jsonResponse({ error: error.message }, 500);
+        savedCount += toInsert.length;
+      }
+      for (const u of toUpdate) {
+        const { error } = await supabase.from("keaktifan").update(u.body).eq("id", u.id);
+        if (error) return jsonResponse({ error: error.message }, 500);
+        savedCount++;
+      }
+
+      return jsonResponse({ success: true, saved: savedCount });
+    }
+
+    // ============================================================
     // MATERI: download file
     // ============================================================
     if (action === "materi-download" && req.method === "GET") {
@@ -826,6 +888,7 @@ Deno.serve(async (req: Request) => {
       "tahun-ajaran": "tahun_ajaran",
       "kesepakatan-kelas": "kesepakatan_kelas",
       "penugasan": "penugasan",
+      "keaktifan": "keaktifan",
     };
 
     if (entityRoutes[action]) {
@@ -850,7 +913,7 @@ Deno.serve(async (req: Request) => {
           if (!isAdmin) {
             if (table === "siswa") {
               query = query.eq("id", user.user_id);
-            } else if (["absensi", "komite", "nilai"].includes(table)) {
+            } else if (["absensi", "komite", "nilai", "keaktifan"].includes(table)) {
               query = query.eq("siswa_id", user.user_id);
             } else if (table === "kesepakatan_kelas") {
               const { data: siswaData } = await supabase
@@ -889,7 +952,7 @@ Deno.serve(async (req: Request) => {
           if (!isAdmin) {
             if (table === "siswa") {
               query = query.eq("id", user.user_id);
-            } else if (["absensi", "komite", "nilai"].includes(table)) {
+            } else if (["absensi", "komite", "nilai", "keaktifan"].includes(table)) {
               query = query.eq("siswa_id", user.user_id);
             } else if (table === "pengumuman") {
               query = supabase.from(table).select("*, kelas:kelas_id(id, nama_kelas, tingkat)");
@@ -975,8 +1038,8 @@ Deno.serve(async (req: Request) => {
             if (tingkatFilter) query = query.eq("tingkat", tingkatFilter);
           }
 
-          // Filter by tahun_ajaran_id and semester for absensi, komite, nilai, kesepakatan_kelas
-          if (["absensi", "komite", "nilai", "kesepakatan_kelas"].includes(table)) {
+          // Filter by tahun_ajaran_id and semester for absensi, komite, nilai, kesepakatan_kelas, keaktifan
+          if (["absensi", "komite", "nilai", "kesepakatan_kelas", "keaktifan"].includes(table)) {
             const taId = new URL(req.url).searchParams.get("tahun_ajaran_id");
             const semesterFilter = new URL(req.url).searchParams.get("semester");
             if (taId) query = query.eq("tahun_ajaran_id", taId);
@@ -992,6 +1055,9 @@ Deno.serve(async (req: Request) => {
             query = query.eq("kelas_id", kelasFilter);
           }
           if (kelasFilter && table === "penugasan") {
+            query = query.eq("kelas_id", kelasFilter);
+          }
+          if (kelasFilter && table === "keaktifan") {
             query = query.eq("kelas_id", kelasFilter);
           }
           if (table === "penugasan") {
@@ -1014,6 +1080,7 @@ Deno.serve(async (req: Request) => {
             else if (table === "pengumuman") query = query.order("created_at", { ascending: false });
             else if (table === "kesepakatan_kelas") query = query.order("tanggal_dibuat", { ascending: false });
             else if (table === "penugasan") query = query.order("created_at", { ascending: false });
+            else if (table === "keaktifan") query = query.order("created_at", { ascending: false });
             else query = query.order("created_at", { ascending: false });
           }
 
