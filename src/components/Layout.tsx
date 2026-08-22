@@ -24,6 +24,7 @@ import {
   GraduationCap as GradIcon,
   Building2,
   NotebookPen,
+  Sparkles,
 } from "lucide-react";
 
 interface NavItem {
@@ -61,6 +62,7 @@ const adminGroups: NavGroup[] = [
       { key: "materi", label: "Materi Ajar", icon: FileText },
       { key: "penugasan", label: "Penugasan", icon: ClipboardList },
       { key: "kesepakatan-kelas", label: "Kesepakatan Kelas", icon: ScrollText },
+      { key: "keaktifan", label: "Keaktifan Siswa", icon: Sparkles },
     ],
   },
   {
@@ -86,6 +88,7 @@ const siswaNav: NavItem[] = [
   { key: "komite", label: "Komite", icon: Wallet },
   { key: "nilai", label: "Nilai", icon: BookOpen },
   { key: "kesepakatan-kelas", label: "Kesepakatan Kelas", icon: ScrollText },
+  { key: "keaktifan", label: "Keaktifan Saya", icon: Sparkles },
   { key: "penugasan", label: "Penugasan", icon: ClipboardList },
   { key: "materi", label: "Materi Ajar", icon: FileText },
 ];
