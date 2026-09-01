@@ -20,6 +20,7 @@ import KesepakatanManager from "./pages/admin/KesepakatanManager";
 import PenugasanManager from "./pages/admin/PenugasanManager";
 import JurnalManager from "./pages/admin/JurnalManager";
 import KeaktifanManager from "./pages/admin/KeaktifanManager";
+import CatatanBurukManager from "./pages/admin/CatatanBurukManager";
 
 // Siswa pages
 import SiswaDashboard from "./pages/siswa/SiswaDashboard";
@@ -31,6 +32,7 @@ import SiswaNilai from "./pages/siswa/SiswaNilai";
 import SiswaPenugasan from "./pages/siswa/SiswaPenugasan";
 import SiswaMateri from "./pages/siswa/SiswaMateri";
 import SiswaKeaktifan from "./pages/siswa/SiswaKeaktifan";
+import SiswaCatatanBuruk from "./pages/siswa/SiswaCatatanBuruk";
 
 function AppContent() {
   const { user, loading } = useAuth();
@@ -81,6 +83,8 @@ function AppContent() {
           return <KeaktifanManager />;
         case "penugasan":
           return <PenugasanManager />;
+        case "catatan-buruk":
+          return <CatatanBurukManager />;
         case "jurnal":
           return <JurnalManager />;
         default:
@@ -104,6 +108,8 @@ function AppContent() {
           return <SiswaKeaktifan />;
         case "penugasan":
           return <SiswaPenugasan />;
+        case "catatan-buruk":
+          return <SiswaCatatanBuruk />;
         case "materi":
           return <SiswaMateri />;
         default:
