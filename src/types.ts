@@ -207,6 +207,31 @@ export interface SiswaStats {
   komiteBelumLunas: number;
 }
 
+export interface Keaktifan {
+  id: string;
+  siswa_id: string;
+  kelas_id: string | null;
+  tahun_ajaran_id: string | null;
+  semester: string;
+  slots: boolean[];
+  aktif_count: number;
+  created_at?: string;
+  updated_at?: string;
+  siswa?: Siswa | null;
+  kelas?: Kelas | null;
+}
+
+export interface CatatanBuruk {
+  id: string;
+  siswa_id: string;
+  tanggal: string;
+  catatan: string;
+  created_by: string;
+  created_at?: string;
+  updated_at?: string;
+  siswa?: Siswa | null;
+}
+
 export interface ListResponse<T> {
   data: T[];
   total: number;
