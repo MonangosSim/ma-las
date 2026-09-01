@@ -889,6 +889,7 @@ Deno.serve(async (req: Request) => {
       "kesepakatan-kelas": "kesepakatan_kelas",
       "penugasan": "penugasan",
       "keaktifan": "keaktifan",
+      "catatan-buruk": "catatan_buruk",
     };
 
     if (entityRoutes[action]) {
@@ -913,7 +914,7 @@ Deno.serve(async (req: Request) => {
           if (!isAdmin) {
             if (table === "siswa") {
               query = query.eq("id", user.user_id);
-            } else if (["absensi", "komite", "nilai", "keaktifan"].includes(table)) {
+            } else if (["absensi", "komite", "nilai", "keaktifan", "catatan_buruk"].includes(table)) {
               query = query.eq("siswa_id", user.user_id);
             } else if (table === "kesepakatan_kelas") {
               const { data: siswaData } = await supabase
@@ -952,7 +953,7 @@ Deno.serve(async (req: Request) => {
           if (!isAdmin) {
             if (table === "siswa") {
               query = query.eq("id", user.user_id);
-            } else if (["absensi", "komite", "nilai", "keaktifan"].includes(table)) {
+            } else if (["absensi", "komite", "nilai", "keaktifan", "catatan_buruk"].includes(table)) {
               query = query.eq("siswa_id", user.user_id);
             } else if (table === "pengumuman") {
               query = supabase.from(table).select("*, kelas:kelas_id(id, nama_kelas, tingkat)");
@@ -1004,6 +1005,9 @@ Deno.serve(async (req: Request) => {
           if (isAdmin && table === "penugasan") {
             query = supabase.from(table).select("*, kelas:kelas_id(id, nama_kelas, tingkat), mata_pelajaran:mata_pelajaran_id(id, nama)");
           }
+          if (table === "catatan_buruk") {
+            query = supabase.from(table).select("*, siswa:siswa_id(id, nama, nisn, kelas_id)");
+          }
 
           const page = parseInt(new URL(req.url).searchParams.get("page") || "1");
           const perPage = parseInt(new URL(req.url).searchParams.get("per_page") || "1000");
@@ -1029,6 +1033,8 @@ Deno.serve(async (req: Request) => {
               query = query.or(`judul.ilike.%${search}%,isi.ilike.%${search}%`);
             } else if (table === "penugasan") {
               query = query.ilike("judul", `%${search}%`);
+            } else if (table === "catatan_buruk") {
+              query = query.ilike("catatan", `%${search}%`);
             }
           }
 
@@ -1064,6 +1070,10 @@ Deno.serve(async (req: Request) => {
             const tipeFilter = new URL(req.url).searchParams.get("tipe");
             if (tipeFilter) query = query.eq("tipe", tipeFilter);
           }
+          if (table === "catatan_buruk") {
+            const siswaIdFilter = new URL(req.url).searchParams.get("siswa_id");
+            if (siswaIdFilter) query = query.eq("siswa_id", siswaIdFilter);
+          }
 
           const orderBy = new URL(req.url).searchParams.get("order_by");
           if (orderBy) {
@@ -1081,6 +1091,7 @@ Deno.serve(async (req: Request) => {
             else if (table === "kesepakatan_kelas") query = query.order("tanggal_dibuat", { ascending: false });
             else if (table === "penugasan") query = query.order("created_at", { ascending: false });
             else if (table === "keaktifan") query = query.order("created_at", { ascending: false });
+            else if (table === "catatan_buruk") query = query.order("tanggal", { ascending: false });
             else query = query.order("created_at", { ascending: false });
           }
 
@@ -1105,9 +1116,6 @@ Deno.serve(async (req: Request) => {
 
       // POST - create
       if (req.method === "POST" && !entityId) {
-        if (table === "penugasan") {
-          return jsonResponse({ error: "Gunakan endpoint /penugasan-upload untuk upload PDF, atau POST dengan tipe link" }, 400);
-        }
         const body = await req.json();
 
         if (table === "siswa") {
@@ -1152,6 +1160,12 @@ Deno.serve(async (req: Request) => {
         }
         if (table === "penugasan") {
           const { data, error } = await supabase.from(table).insert(body).select("*, kelas:kelas_id(id, nama_kelas, tingkat), mata_pelajaran:mata_pelajaran_id(id, nama)").single();
+          if (error) return jsonResponse({ error: error.message }, 500);
+          return jsonResponse({ data });
+        }
+        if (table === "catatan_buruk") {
+          body.created_by = user.nama || "";
+          const { data, error } = await supabase.from(table).insert(body).select("*, siswa:siswa_id(id, nama, nisn, kelas_id)").single();
           if (error) return jsonResponse({ error: error.message }, 500);
           return jsonResponse({ data });
         }
@@ -1214,6 +1228,16 @@ Deno.serve(async (req: Request) => {
           if (error) return jsonResponse({ error: error.message }, 500);
           return jsonResponse({ data });
         }
+        if (table === "catatan_buruk") {
+          const { data, error } = await supabase
+            .from(table)
+            .update(body)
+            .eq("id", entityId)
+            .select("*, siswa:siswa_id(id, nama, nisn, kelas_id)")
+            .single();
+          if (error) return jsonResponse({ error: error.message }, 500);
+          return jsonResponse({ data });
+        }
 
         const { data, error } = await supabase.from(table).update(body).eq("id", entityId).select().single();
         if (error) return jsonResponse({ error: error.message }, 500);
@@ -1272,6 +1296,49 @@ Deno.serve(async (req: Request) => {
         if (error) return jsonResponse({ error: error.message }, 500);
         return jsonResponse({ data });
       }
+    }
+
+    // ============================================================
+    // SISWA PROFILE: self-edit
+    // ============================================================
+    if (action === "update-profile" && req.method === "PUT") {
+      const user = await getAuthUser(req);
+      if (!user) return jsonResponse({ error: "Tidak terautentikasi" }, 401);
+      if (user.user_type !== "siswa" && user.user_type !== "ortu") {
+        return jsonResponse({ error: "Akses ditolak" }, 403);
+      }
+
+      const body = await req.json();
+      const allowedFields = [
+        "jenis_kelamin",
+        "tempat_lahir",
+        "tanggal_lahir",
+        "alamat",
+        "nama_ortu",
+        "no_hp_ortu",
+      ];
+      const update: Record<string, unknown> = { updated_at: new Date().toISOString() };
+      for (const f of allowedFields) {
+        if (body[f] !== undefined) {
+          update[f] = typeof body[f] === "string" ? body[f].trim() : body[f];
+        }
+      }
+      if (update.jenis_kelamin !== undefined) {
+        const jk = String(update.jenis_kelamin).toUpperCase();
+        if (jk !== "L" && jk !== "P" && jk !== "") {
+          return jsonResponse({ error: "Jenis kelamin tidak valid" }, 400);
+        }
+        update.jenis_kelamin = jk;
+      }
+
+      const { data, error } = await supabase
+        .from("siswa")
+        .update(update)
+        .eq("id", user.user_id)
+        .select("*, kelas:kelas_id(*)")
+        .maybeSingle();
+      if (error) return jsonResponse({ error: error.message }, 500);
+      return jsonResponse({ data });
     }
 
     // ============================================================
