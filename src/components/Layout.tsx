@@ -25,6 +25,7 @@ import {
   Building2,
   NotebookPen,
   Sparkles,
+  AlertTriangle,
 } from "lucide-react";
 
 interface NavItem {
@@ -63,6 +64,7 @@ const adminGroups: NavGroup[] = [
       { key: "penugasan", label: "Penugasan", icon: ClipboardList },
       { key: "kesepakatan-kelas", label: "Kesepakatan Kelas", icon: ScrollText },
       { key: "keaktifan", label: "Keaktifan Siswa", icon: Sparkles },
+      { key: "catatan-buruk", label: "Catatan Buruk", icon: AlertTriangle },
     ],
   },
   {
@@ -90,6 +92,7 @@ const siswaNav: NavItem[] = [
   { key: "kesepakatan-kelas", label: "Kesepakatan Kelas", icon: ScrollText },
   { key: "keaktifan", label: "Keaktifan Saya", icon: Sparkles },
   { key: "penugasan", label: "Penugasan", icon: ClipboardList },
+  { key: "catatan-buruk", label: "Catatan Buruk", icon: AlertTriangle },
   { key: "materi", label: "Materi Ajar", icon: FileText },
 ];
 
