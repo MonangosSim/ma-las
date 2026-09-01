@@ -18,6 +18,7 @@ import type {
   SiswaStats,
   TahunAjaran,
   KesepakatanKelas,
+  CatatanBuruk,
 } from "./types";
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
@@ -131,6 +132,10 @@ export const api = {
 
   async getProfile(): Promise<{ data: Siswa | Akun }> {
     return request("/profile");
+  },
+
+  async updateProfile(data: Partial<Pick<Siswa, "jenis_kelamin" | "tempat_lahir" | "tanggal_lahir" | "alamat" | "nama_ortu" | "no_hp_ortu">>): Promise<{ data: Siswa }> {
+    return request("/update-profile", { method: "PUT", body: JSON.stringify(data) });
   },
 
   // ============================================================
@@ -484,7 +489,10 @@ export const api = {
     tahun_ajaran_id: string | null;
     semester: string;
   }): Promise<{ data: Penugasan }> {
-    return request("/penugasan", { method: "POST", body: JSON.stringify(data) });
+    return request("/penugasan", {
+      method: "POST",
+      body: JSON.stringify({ ...data, tipe: "link", file_path: "", file_name: "", file_size: 0, file_type: "" }),
+    });
   },
 
   async updatePenugasan(id: string, data: Partial<Penugasan>): Promise<{ data: Penugasan }> {
@@ -527,5 +535,31 @@ export const api = {
         entries: entries.map((e) => ({ siswa_id: e.siswa_id, slots: e.slots, aktif_count: e.aktif_count })),
       }),
     });
+  },
+
+  // ============================================================
+  // CATATAN BURUK
+  // ============================================================
+  async listCatatanBuruk(params?: { search?: string; siswa_id?: string }): Promise<ListResponse<CatatanBuruk>> {
+    const q = new URLSearchParams();
+    if (params?.search) q.set("search", params.search);
+    if (params?.siswa_id) q.set("siswa_id", params.siswa_id);
+    return request(`/catatan-buruk?${q.toString()}`);
+  },
+
+  async createCatatanBuruk(data: {
+    siswa_id: string;
+    tanggal: string;
+    catatan: string;
+  }): Promise<{ data: CatatanBuruk }> {
+    return request("/catatan-buruk", { method: "POST", body: JSON.stringify(data) });
+  },
+
+  async updateCatatanBuruk(id: string, data: Partial<CatatanBuruk>): Promise<{ data: CatatanBuruk }> {
+    return request(`/catatan-buruk/${id}`, { method: "PUT", body: JSON.stringify(data) });
+  },
+
+  async deleteCatatanBuruk(id: string): Promise<void> {
+    await request(`/catatan-buruk/${id}`, { method: "DELETE" });
   },
 };
