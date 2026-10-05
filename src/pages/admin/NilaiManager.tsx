@@ -5,7 +5,8 @@ import { PageHeader, LoadingState, ErrorState, EmptyState } from "../../componen
 import Modal from "../../components/Modal";
 import ConfirmDialog from "../../components/ConfirmDialog";
 import { useTahunAjaran } from "../../context/TahunAjaranContext";
-import { Plus, Pencil, Trash2, Search, Loader2, CalendarRange, Table, Grid3x3, ArrowUpDown } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, Loader2, CalendarRange, Table, Grid3x3, ArrowUpDown, Download } from "lucide-react";
+import * as XLSX from "xlsx";
 
 interface FormState {
   siswa_id: string;
@@ -216,16 +217,49 @@ export default function NilaiManager() {
   // Siswa options for the form modal (filtered by kelas if set)
   const formSiswaOptions = kelasFilter ? filteredSiswa : siswaList;
 
+  const handleDownloadPivotExcel = () => {
+    if (filteredSiswa.length === 0) return;
+    const rows: Record<string, string | number>[] = filteredSiswa.map((s) => {
+      const arr = informatikaData.get(s.id) || [];
+      const row: Record<string, string | number> = {
+        Nama: s.nama,
+        NISN: s.nisn,
+        Kelas: s.kelas_id ? kelasMap.get(s.kelas_id)?.nama_kelas || "-" : "-",
+        "Jml Nilai": arr.length,
+      };
+      for (let i = 0; i < maxInformatikaCount; i++) {
+        row[`N${i + 1}`] = arr[i]?.nilai ?? "";
+      }
+      const rata = avg(Array.from({ length: maxInformatikaCount }, (_, i) => arr[i]?.nilai ?? 0));
+      row["Rata-rata"] = rata.toFixed(1);
+      row["Grade"] = getGradeLabel(rata);
+      return row;
+    });
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Nilai Pivot");
+    const kelasNama = kelasFilter ? kelasMap.get(kelasFilter)?.nama_kelas || "" : "Semua";
+    XLSX.writeFile(wb, `Nilai_Pivot_${kelasNama}_${selectedSemester}_${activeTahunAjaranNama || ""}.xlsx`);
+  };
+
   return (
     <div>
       <PageHeader
         title="Manajemen Nilai"
         subtitle="Kelola nilai akademik siswa per mata pelajaran"
         actions={
-          <button onClick={openCreate} className="btn-primary">
-            <Plus className="w-4 h-4" />
-            Tambah Nilai
-          </button>
+          <div className="flex gap-2">
+            {viewMode === "pivot" && filteredSiswa.length > 0 && (
+              <button onClick={handleDownloadPivotExcel} className="btn-secondary">
+                <Download className="w-4 h-4" />
+                Download Excel
+              </button>
+            )}
+            <button onClick={openCreate} className="btn-primary">
+              <Plus className="w-4 h-4" />
+              Tambah Nilai
+            </button>
+          </div>
         }
       />
 
