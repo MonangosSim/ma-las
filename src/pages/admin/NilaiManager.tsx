@@ -5,21 +5,24 @@ import { PageHeader, LoadingState, ErrorState, EmptyState } from "../../componen
 import Modal from "../../components/Modal";
 import ConfirmDialog from "../../components/ConfirmDialog";
 import { useTahunAjaran } from "../../context/TahunAjaranContext";
-import { Plus, Pencil, Trash2, Search, Loader2, CalendarRange, Table, Grid3x3, ArrowUpDown, Download } from "lucide-react";
-import * as XLSX from "xlsx";
+import { Plus, Pencil, Trash2, Search, Loader2, CalendarRange, Table, Grid3x3, ArrowUpDown } from "lucide-react";
 
 interface FormState {
   siswa_id: string;
   mata_pelajaran: string;
   jenis_nilai: string;
   nilai: string;
+  nilai_ke: string;
 }
+
+const INFO_MATPEL = "Informatika";
 
 const emptyForm: FormState = {
   siswa_id: "",
-  mata_pelajaran: "",
+  mata_pelajaran: INFO_MATPEL,
   jenis_nilai: "Harian",
   nilai: "0",
+  nilai_ke: "",
 };
 
 function getGradeColor(nilai: number): string {
@@ -108,24 +111,34 @@ export default function NilaiManager() {
 
   // Nilai entries filtered by kelas (via siswa) and search
   const filteredData = useMemo(() => {
-    return data.filter((n) => {
-      if (kelasFilter && !filteredSiswaIds.has(n.siswa_id)) return false;
-      const siswa = siswaMap.get(n.siswa_id);
-      if (search.trim() && siswa && !siswa.nama.toLowerCase().includes(search.toLowerCase())) return false;
-      return true;
-    });
+    return data
+      .filter((n) => {
+        if (kelasFilter && !filteredSiswaIds.has(n.siswa_id)) return false;
+        const siswa = siswaMap.get(n.siswa_id);
+        if (search.trim() && siswa && !siswa.nama.toLowerCase().includes(search.toLowerCase())) return false;
+        return true;
+      })
+      .sort((a, b) => {
+        const ka = a.nilai_ke ?? 999999;
+        const kb = b.nilai_ke ?? 999999;
+        return ka - kb;
+      });
   }, [data, kelasFilter, filteredSiswaIds, search, siswaMap]);
 
-  const INFO_MATPEL = "Informatika";
-
-  // Informatika nilai per siswa: siswa_id -> array of {id, nilai, jenis_nilai}
+  // Informatika nilai per siswa: siswa_id -> array of {id, nilai, jenis_nilai, nilai_ke}
+  // sorted by nilai_ke ascending
   const informatikaData = useMemo(() => {
     const map = new Map<string, { id: string; nilai: number; jenis: string }[]>();
     filteredData
       .filter((n) => n.mata_pelajaran === INFO_MATPEL)
+      .sort((a, b) => {
+        const ka = a.nilai_ke ?? 999999;
+        const kb = b.nilai_ke ?? 999999;
+        return ka - kb;
+      })
       .forEach((n) => {
         if (!map.has(n.siswa_id)) map.set(n.siswa_id, []);
-        map.get(n.siswa_id)!.push({ id: n.id, nilai: Number(n.nilai), jenis: n.jenis_nilai });
+        map.get(n.siswa_id)!.push({ id: n.id, nilai: Number(n.nilai), jenis: n.jenis_nilai, nilai_ke: n.nilai_ke });
       });
     return map;
   }, [filteredData]);
@@ -155,6 +168,7 @@ export default function NilaiManager() {
       mata_pelajaran: n.mata_pelajaran,
       jenis_nilai: n.jenis_nilai,
       nilai: String(n.nilai),
+      nilai_ke: n.nilai_ke != null ? String(n.nilai_ke) : "",
     });
     setFormError("");
     setModalOpen(true);
@@ -176,6 +190,11 @@ export default function NilaiManager() {
       setFormError("Nilai harus berupa angka antara 0 dan 100");
       return;
     }
+    const nilaiKeInt = form.nilai_ke.trim() ? parseInt(form.nilai_ke, 10) : null;
+    if (form.nilai_ke.trim() && (isNaN(nilaiKeInt!) || nilaiKeInt! < 1)) {
+      setFormError("Nilai Ke harus berupa bilangan bulat positif (min 1)");
+      return;
+    }
     setSaving(true);
     try {
       const payload = {
@@ -183,6 +202,7 @@ export default function NilaiManager() {
         mata_pelajaran: form.mata_pelajaran,
         jenis_nilai: form.jenis_nilai,
         nilai: nilaiNum,
+        nilai_ke: nilaiKeInt,
         semester: selectedSemester,
         tahun_ajaran_id: selectedTahunAjaranId || null,
       };
@@ -217,49 +237,16 @@ export default function NilaiManager() {
   // Siswa options for the form modal (filtered by kelas if set)
   const formSiswaOptions = kelasFilter ? filteredSiswa : siswaList;
 
-  const handleDownloadPivotExcel = () => {
-    if (filteredSiswa.length === 0) return;
-    const rows: Record<string, string | number>[] = filteredSiswa.map((s) => {
-      const arr = informatikaData.get(s.id) || [];
-      const row: Record<string, string | number> = {
-        Nama: s.nama,
-        NISN: s.nisn,
-        Kelas: s.kelas_id ? kelasMap.get(s.kelas_id)?.nama_kelas || "-" : "-",
-        "Jml Nilai": arr.length,
-      };
-      for (let i = 0; i < maxInformatikaCount; i++) {
-        row[`N${i + 1}`] = arr[i]?.nilai ?? "";
-      }
-      const rata = avg(Array.from({ length: maxInformatikaCount }, (_, i) => arr[i]?.nilai ?? 0));
-      row["Rata-rata"] = rata.toFixed(1);
-      row["Grade"] = getGradeLabel(rata);
-      return row;
-    });
-    const ws = XLSX.utils.json_to_sheet(rows);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Nilai Pivot");
-    const kelasNama = kelasFilter ? kelasMap.get(kelasFilter)?.nama_kelas || "" : "Semua";
-    XLSX.writeFile(wb, `Nilai_Pivot_${kelasNama}_${selectedSemester}_${activeTahunAjaranNama || ""}.xlsx`);
-  };
-
   return (
     <div>
       <PageHeader
         title="Manajemen Nilai"
         subtitle="Kelola nilai akademik siswa per mata pelajaran"
         actions={
-          <div className="flex gap-2">
-            {viewMode === "pivot" && filteredSiswa.length > 0 && (
-              <button onClick={handleDownloadPivotExcel} className="btn-secondary">
-                <Download className="w-4 h-4" />
-                Download Excel
-              </button>
-            )}
-            <button onClick={openCreate} className="btn-primary">
-              <Plus className="w-4 h-4" />
-              Tambah Nilai
-            </button>
-          </div>
+          <button onClick={openCreate} className="btn-primary">
+            <Plus className="w-4 h-4" />
+            Tambah Nilai
+          </button>
         }
       />
 
@@ -421,6 +408,7 @@ export default function NilaiManager() {
                   <th className="text-left px-4 py-3 font-semibold text-slate-700">Siswa</th>
                   <th className="text-left px-4 py-3 font-semibold text-slate-700">Mata Pelajaran</th>
                   <th className="text-left px-4 py-3 font-semibold text-slate-700">Jenis</th>
+                  <th className="text-center px-4 py-3 font-semibold text-slate-700">Nilai Ke</th>
                   <th className="text-center px-4 py-3 font-semibold text-slate-700">Nilai</th>
                   <th className="text-center px-4 py-3 font-semibold text-slate-700">Grade</th>
                   <th className="text-left px-4 py-3 font-semibold text-slate-700">Periode</th>
@@ -438,6 +426,7 @@ export default function NilaiManager() {
                       </td>
                       <td className="px-4 py-3 text-slate-600">{n.mata_pelajaran}</td>
                       <td className="px-4 py-3 text-slate-600">{n.jenis_nilai}</td>
+                      <td className="px-4 py-3 text-center font-medium text-slate-700">{n.nilai_ke ?? "-"}</td>
                       <td className="px-4 py-3 text-center">
                         <span className={`badge ${getGradeColor(nilaiNum)}`}>{nilaiNum}</span>
                       </td>
@@ -502,10 +491,13 @@ export default function NilaiManager() {
                 className="input-field"
                 disabled={saving}
               >
-                <option value="">Pilih mata pelajaran</option>
-                {mapelList.map((m) => (
-                  <option key={m.id} value={m.nama}>{m.nama}</option>
-                ))}
+                {mapelList.length > 0 ? (
+                  mapelList.map((m) => (
+                    <option key={m.id} value={m.nama}>{m.nama}</option>
+                  ))
+                ) : (
+                  <option value={INFO_MATPEL}>{INFO_MATPEL}</option>
+                )}
               </select>
             </div>
             <div>
@@ -533,6 +525,19 @@ export default function NilaiManager() {
                 max="100"
                 disabled={saving}
               />
+            </div>
+            <div>
+              <label className="input-label">Nilai Ke *</label>
+              <input
+                type="number"
+                value={form.nilai_ke}
+                onChange={(e) => setForm({ ...form, nilai_ke: e.target.value })}
+                className="input-field"
+                min="1"
+                placeholder="1, 2, 3, ..."
+                disabled={saving}
+              />
+              <p className="text-xs text-slate-400 mt-1">Urutan nilai dalam laporan</p>
             </div>
             <div>
               <label className="input-label">Periode</label>
