@@ -81,17 +81,23 @@ export default function SiswaNilai() {
                 <tr className="border-b border-slate-200 bg-slate-50">
                   <th className="text-left px-4 py-3 font-semibold text-slate-700">Mata Pelajaran</th>
                   <th className="text-left px-4 py-3 font-semibold text-slate-700">Jenis</th>
+                  <th className="text-center px-4 py-3 font-semibold text-slate-700">Nilai Ke</th>
                   <th className="text-center px-4 py-3 font-semibold text-slate-700">Nilai</th>
                   <th className="text-center px-4 py-3 font-semibold text-slate-700">Grade</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {data.map((n) => {
+                {[...data].sort((a, b) => {
+                  const ka = a.nilai_ke ?? 999999;
+                  const kb = b.nilai_ke ?? 999999;
+                  return ka - kb;
+                }).map((n) => {
                   const nilaiNum = Number(n.nilai);
                   return (
                     <tr key={n.id} className="hover:bg-slate-50 transition-colors">
                       <td className="px-4 py-3 font-medium text-slate-900">{n.mata_pelajaran}</td>
                       <td className="px-4 py-3 text-slate-600">{n.jenis_nilai}</td>
+                      <td className="px-4 py-3 text-center font-medium text-slate-700">{n.nilai_ke ?? "-"}</td>
                       <td className="px-4 py-3 text-center">
                         <span className={`badge ${getGradeColor(nilaiNum)}`}>{nilaiNum}</span>
                       </td>
