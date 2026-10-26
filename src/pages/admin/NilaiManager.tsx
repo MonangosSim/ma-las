@@ -5,7 +5,8 @@ import { PageHeader, LoadingState, ErrorState, EmptyState } from "../../componen
 import Modal from "../../components/Modal";
 import ConfirmDialog from "../../components/ConfirmDialog";
 import { useTahunAjaran } from "../../context/TahunAjaranContext";
-import { Plus, Pencil, Trash2, Search, Loader2, CalendarRange, Table, Grid3x3, ArrowUpDown } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, Loader2, CalendarRange, Table, Grid3x3, ArrowUpDown, Download } from "lucide-react";
+import * as XLSX from "xlsx";
 
 interface FormState {
   siswa_id: string;
@@ -237,16 +238,77 @@ export default function NilaiManager() {
   // Siswa options for the form modal (filtered by kelas if set)
   const formSiswaOptions = kelasFilter ? filteredSiswa : siswaList;
 
+  const handleDownloadExcel = () => {
+    const periodeLabel = `${selectedSemester} ${activeTahunAjaranNama}`.trim();
+
+    if (viewMode === "pivot") {
+      const headers = ["Nama Siswa", "Kelas", "Jml Nilai"];
+      for (let i = 1; i <= maxInformatikaCount; i++) headers.push(`N${i}`);
+      headers.push("Rata-rata", "Grade");
+
+      const rows = filteredSiswa.map((s) => {
+        const arr = informatikaData.get(s.id) || [];
+        const paddedArr = Array.from({ length: maxInformatikaCount }, (_, i) => arr[i]?.nilai ?? "");
+        const rata = arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+        return [
+          s.nama,
+          s.kelas_id ? kelasMap.get(s.kelas_id)?.nama_kelas || "-" : "-",
+          arr.length,
+          ...paddedArr,
+          rata.toFixed(1),
+          getGradeLabel(rata),
+        ];
+      });
+
+      const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Pivot Nilai");
+      XLSX.writeFile(wb, `Nilai_Pivot_${periodeLabel.replace(/\s+/g, "_")}.xlsx`);
+    } else {
+      const headers = ["Siswa", "Mata Pelajaran", "Jenis", "Nilai Ke", "Nilai", "Grade", "Periode"];
+      const rows = filteredData.map((n) => {
+        const siswa = siswaMap.get(n.siswa_id);
+        const nilaiNum = Number(n.nilai);
+        const periode = `${n.semester}${n.tahun_ajaran_id && tahunAjaranMap.get(n.tahun_ajaran_id) ? " — " + tahunAjaranMap.get(n.tahun_ajaran_id) : ""}`;
+        return [
+          siswa?.nama || "Siswa tidak ditemukan",
+          n.mata_pelajaran,
+          n.jenis_nilai,
+          n.nilai_ke ?? "-",
+          nilaiNum,
+          getGradeLabel(nilaiNum),
+          periode,
+        ];
+      });
+
+      const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Daftar Nilai");
+      XLSX.writeFile(wb, `Nilai_Daftar_${periodeLabel.replace(/\s+/g, "_")}.xlsx`);
+    }
+  };
+
   return (
     <div>
       <PageHeader
         title="Manajemen Nilai"
         subtitle="Kelola nilai akademik siswa per mata pelajaran"
         actions={
-          <button onClick={openCreate} className="btn-primary">
-            <Plus className="w-4 h-4" />
-            Tambah Nilai
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleDownloadExcel}
+              className="btn-secondary"
+              disabled={loading || filteredData.length === 0}
+              title="Download ke Excel"
+            >
+              <Download className="w-4 h-4" />
+              Excel
+            </button>
+            <button onClick={openCreate} className="btn-primary">
+              <Plus className="w-4 h-4" />
+              Tambah Nilai
+            </button>
+          </div>
         }
       />
 
