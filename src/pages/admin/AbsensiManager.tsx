@@ -16,7 +16,9 @@ import {
   Users,
   CheckCircle2,
   ClipboardList,
+  Download,
 } from "lucide-react";
+
 
 const statusColors: Record<string, string> = {
   Hadir: "bg-emerald-100 text-emerald-700",
@@ -654,6 +656,8 @@ export default function AbsensiManager() {
                 <RekapTable
                   rekapData={rekapData}
                   siswaInKelas={siswaList.filter((s) => s.kelas_id === rekapKelas).sort((a, b) => a.nama.localeCompare(b.nama))}
+                  kelasName={kelasMap.get(rekapKelas)?.nama_kelas || "Kelas"}
+                  periodeLabel={`${selectedSemester} ${tahunAjaranMap.get(selectedTahunAjaranId) || ""}`.trim()}
                 />
               )}
             </div>
@@ -764,7 +768,17 @@ export default function AbsensiManager() {
 // ============================================================
 // RekapTable: pivot table siswa x tanggal
 // ============================================================
-function RekapTable({ rekapData, siswaInKelas }: { rekapData: Absensi[]; siswaInKelas: Siswa[] }) {
+function RekapTable({
+  rekapData,
+  siswaInKelas,
+  kelasName,
+  periodeLabel,
+}: {
+  rekapData: Absensi[];
+  siswaInKelas: Siswa[];
+  kelasName: string;
+  periodeLabel: string;
+}) {
   const statusColors: Record<string, string> = {
     Hadir: "bg-emerald-100 text-emerald-700",
     Sakit: "bg-amber-100 text-amber-700",
@@ -815,6 +829,103 @@ function RekapTable({ rekapData, siswaInKelas }: { rekapData: Absensi[]; siswaIn
     return map;
   }, [siswaInKelas, cellMap]);
 
+  const handleDownloadExcel = () => {
+    const xmlEscape = (v: string | number) =>
+      String(v).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+    const headers: (string | number)[] = ["Nama Siswa"];
+    dates.forEach((d) => headers.push(formatDateShort(d)));
+    headers.push("H", "S", "I", "A", "Total", "% Hadir");
+
+    const rowsData = siswaInKelas.map((s) => {
+      const inner = cellMap.get(s.id);
+      const counts = summary.get(s.id)!;
+      const hadirEfektif = counts.H + counts.S + counts.I;
+      const ratio = counts.total > 0 ? hadirEfektif / counts.total : 0;
+      const pctVal = counts.total > 0 ? Math.round(ratio * 100) : 0;
+      const row: (string | number)[] = [s.nama];
+      dates.forEach((d) => {
+        const status = inner?.get(d);
+        row.push(status ? statusShort[status] || "" : "");
+      });
+      row.push(counts.H, counts.S, counts.I, counts.A, counts.total, pctVal);
+      return { row, ratio };
+    });
+
+    const colCount = headers.length;
+    const rowCount = rowsData.length + 1;
+
+    let xml = '<?xml version="1.0"?>\n';
+    xml += '<?mso-application progid="Excel.Sheet"?>\n';
+    xml += '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">\n';
+    xml += '<Styles>\n';
+    xml += '<Style ss:ID="Header"><Font ss:Bold="1"/><Interior ss:Color="#E2E8F0" ss:Pattern="Solid"/></Style>\n';
+    xml += '<Style ss:ID="Normal"/>\n';
+    xml += '<Style ss:ID="Alpa"><Font ss:Color="#FF0000" ss:Bold="1"/><Interior ss:Color="#FFC7CE" ss:Pattern="Solid"/></Style>\n';
+    xml += '<Style ss:ID="Sakit"><Font ss:Color="#000000" ss:Bold="1"/><Interior ss:Color="#FFFF00" ss:Pattern="Solid"/></Style>\n';
+    xml += '<Style ss:ID="Izin"><Font ss:Color="#FFFFFF" ss:Bold="1"/><Interior ss:Color="#0000FF" ss:Pattern="Solid"/></Style>\n';
+    xml += '<Style ss:ID="Hadir"><Font ss:Color="#000000" ss:Bold="1"/></Style>\n';
+    xml += '<Style ss:ID="PctLow"><Font ss:Color="#FF0000" ss:Bold="1"/></Style>\n';
+    xml += '<Style ss:ID="PctOk"><Font ss:Color="#000000" ss:Bold="1"/></Style>\n';
+    xml += '</Styles>\n';
+    xml += '<Worksheet ss:Name="Rekap Absensi"><Table>\n';
+
+    // Column widths
+    for (let c = 0; c < colCount; c++) {
+      xml += `<Column ss:Width="${c === 0 ? 140 : 50}"/>\n`;
+    }
+
+    // Header row
+    xml += "<Row>";
+    headers.forEach((h) => {
+      xml += `<Cell ss:StyleID="Header"><Data ss:Type="String">${xmlEscape(h)}</Data></Cell>`;
+    });
+    xml += "</Row>\n";
+
+    // Data rows
+    rowsData.forEach(({ row, ratio }) => {
+      xml += "<Row>";
+      row.forEach((val, c) => {
+        const colName = headers[c] as string;
+        let styleId = "Normal";
+        let dataType = "String";
+
+        if (c === 0) {
+          styleId = "Normal";
+          dataType = "String";
+        } else if (colName === "H" || colName === "S" || colName === "I" || colName === "A" || colName === "Total") {
+          styleId = "Normal";
+          dataType = "Number";
+        } else if (colName === "% Hadir") {
+          styleId = ratio < 0.8 ? "PctLow" : "PctOk";
+          dataType = "Number";
+        } else {
+          const shortStatus = String(val);
+          if (shortStatus === "A") styleId = "Alpa";
+          else if (shortStatus === "S") styleId = "Sakit";
+          else if (shortStatus === "I") styleId = "Izin";
+          else if (shortStatus === "H") styleId = "Hadir";
+        }
+
+        const isNumber = dataType === "Number" && typeof val === "number";
+        xml += `<Cell ss:StyleID="${styleId}"><Data ss:Type="${dataType}">${xmlEscape(isNumber ? val : val === "" ? "" : val)}</Data></Cell>`;
+      });
+      xml += "</Row>\n";
+    });
+
+    xml += "</Table></Worksheet></Workbook>";
+
+    const blob = new Blob([xml], { type: "application/vnd.ms-excel" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `Rekap_Absensi_${kelasName.replace(/\s+/g, "_")}_${periodeLabel.replace(/\s+/g, "_")}.xls`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   const formatDateShort = (d: string) => {
     const date = new Date(d + "T00:00:00");
     return date.toLocaleDateString("id-ID", { day: "2-digit", month: "short" });
@@ -830,6 +941,16 @@ function RekapTable({ rekapData, siswaInKelas }: { rekapData: Absensi[]; siswaIn
 
   return (
     <div className="overflow-x-auto">
+      <div className="flex justify-end px-4 py-2 bg-slate-50 border-b border-slate-200">
+        <button
+          onClick={handleDownloadExcel}
+          className="btn-secondary"
+          title="Download rekap kehadiran ke Excel"
+        >
+          <Download className="w-4 h-4" />
+          Excel
+        </button>
+      </div>
       <table className="w-full text-sm border-collapse">
         <thead>
           <tr className="bg-slate-50">
