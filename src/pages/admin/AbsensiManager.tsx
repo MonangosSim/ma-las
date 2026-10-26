@@ -16,9 +16,7 @@ import {
   Users,
   CheckCircle2,
   ClipboardList,
-  Download,
 } from "lucide-react";
-import * as XLSX from "xlsx";
 
 const statusColors: Record<string, string> = {
   Hadir: "bg-emerald-100 text-emerald-700",
@@ -259,55 +257,6 @@ export default function AbsensiManager() {
     } finally {
       setDeleting(false);
     }
-  };
-
-  const handleDownloadRekapExcel = () => {
-    if (!rekapKelas || rekapData.length === 0) return;
-    const siswaInKelas = siswaList
-      .filter((s) => s.kelas_id === rekapKelas)
-      .sort((a, b) => a.nama.localeCompare(b.nama));
-    if (siswaInKelas.length === 0) return;
-
-    const dateSet = new Set<string>();
-    rekapData.forEach((a) => dateSet.add(a.tanggal));
-    const dates = Array.from(dateSet).sort();
-
-    const cellMap = new Map<string, Map<string, string>>();
-    rekapData.forEach((a) => {
-      if (!cellMap.has(a.siswa_id)) cellMap.set(a.siswa_id, new Map());
-      cellMap.get(a.siswa_id)!.set(a.tanggal, a.status);
-    });
-
-    const statusShort: Record<string, string> = { Hadir: "H", Sakit: "S", Izin: "I", Alpa: "A" };
-
-    const rows: Record<string, string | number>[] = siswaInKelas.map((s) => {
-      const inner = cellMap.get(s.id);
-      const counts = { H: 0, S: 0, I: 0, A: 0, total: 0 };
-      const row: Record<string, string | number> = { Nama: s.nama, NISN: s.nisn };
-      dates.forEach((d) => {
-        const status = inner?.get(d);
-        row[new Date(d + "T00:00:00").toLocaleDateString("id-ID", { day: "2-digit", month: "short" })] = status ? statusShort[status] || "?" : "";
-        if (status) {
-          counts.total++;
-          if (status === "Hadir") counts.H++;
-          else if (status === "Sakit") counts.S++;
-          else if (status === "Izin") counts.I++;
-          else if (status === "Alpa") counts.A++;
-        }
-      });
-      row["H"] = counts.H;
-      row["S"] = counts.S;
-      row["I"] = counts.I;
-      row["A"] = counts.A;
-      row["% Hadir"] = counts.total > 0 ? Math.round((counts.H / counts.total) * 100) : 0;
-      return row;
-    });
-
-    const ws = XLSX.utils.json_to_sheet(rows);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Rekap Absensi");
-    const kelasNama = kelasMap.get(rekapKelas)?.nama_kelas || "";
-    XLSX.writeFile(wb, `Rekap_Absensi_${kelasNama}_${selectedSemester}_${tahunAjaranMap.get(selectedTahunAjaranId) || ""}.xlsx`);
   };
 
   if (loading) return <LoadingState />;
@@ -681,23 +630,15 @@ export default function AbsensiManager() {
 
           {rekapKelas && (
             <div className="card overflow-hidden">
-              <div className="px-5 py-4 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <div>
-                  <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
-                    <span className="w-6 h-6 rounded-full bg-teal-100 text-teal-700 flex items-center justify-center text-xs font-bold">2</span>
-                    Rekap Kehadiran Siswa
-                  </h3>
-                  {rekapKelas && (
-                    <p className="text-xs text-slate-500 mt-1 ml-8">
-                      {kelasMap.get(rekapKelas)?.nama_kelas} • {selectedSemester} • {tahunAjaranMap.get(selectedTahunAjaranId) || ""}
-                    </p>
-                  )}
-                </div>
-                {rekapData.length > 0 && (
-                  <button onClick={handleDownloadRekapExcel} className="btn-secondary text-sm">
-                    <Download className="w-4 h-4" />
-                    Download Excel
-                  </button>
+              <div className="px-5 py-4 border-b border-slate-200">
+                <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
+                  <span className="w-6 h-6 rounded-full bg-teal-100 text-teal-700 flex items-center justify-center text-xs font-bold">2</span>
+                  Rekap Kehadiran Siswa
+                </h3>
+                {rekapKelas && (
+                  <p className="text-xs text-slate-500 mt-1 ml-8">
+                    {kelasMap.get(rekapKelas)?.nama_kelas} • {selectedSemester} • {tahunAjaranMap.get(selectedTahunAjaranId) || ""}
+                  </p>
                 )}
               </div>
 
@@ -913,7 +854,7 @@ function RekapTable({ rekapData, siswaInKelas }: { rekapData: Absensi[]; siswaIn
             <th className="text-center px-2 py-3 font-semibold text-amber-700 min-w-[50px] bg-amber-50 border-b border-slate-200">S</th>
             <th className="text-center px-2 py-3 font-semibold text-blue-700 min-w-[50px] bg-blue-50 border-b border-slate-200">I</th>
             <th className="text-center px-2 py-3 font-semibold text-rose-700 min-w-[50px] bg-rose-50 border-b border-slate-200">A</th>
-            <th className="text-center px-3 py-3 font-semibold text-teal-700 min-w-[70px] bg-teal-50 border-b border-slate-200">% Hadir</th>
+            <th className="text-center px-3 py-3 font-semibold text-teal-700 min-w-[70px] bg-teal-50 border-b border-slate-200" title="Hadir + Sakit + Izin ÷ Total. Alpa dianggap tidak hadir">% Hadir</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
@@ -956,9 +897,15 @@ function RekapTable({ rekapData, siswaInKelas }: { rekapData: Absensi[]; siswaIn
                   <span className="text-sm font-semibold text-rose-700">{counts.A}</span>
                 </td>
                 <td className="text-center px-3 py-2.5 bg-teal-50/50">
-                  <span className={`text-sm font-bold ${counts.total > 0 ? (counts.H / counts.total >= 0.8 ? "text-emerald-700" : counts.H / counts.total >= 0.5 ? "text-amber-700" : "text-rose-700") : "text-slate-400"}`}>
-                    {counts.total > 0 ? Math.round((counts.H / counts.total) * 100) : 0}%
-                  </span>
+                  {(() => {
+                    const hadirEfektif = counts.H + counts.S + counts.I;
+                    const ratio = counts.total > 0 ? hadirEfektif / counts.total : 0;
+                    return (
+                      <span className={`text-sm font-bold ${counts.total > 0 ? (ratio >= 0.8 ? "text-emerald-700" : ratio >= 0.5 ? "text-amber-700" : "text-rose-700") : "text-slate-400"}`}>
+                        {counts.total > 0 ? Math.round(ratio * 100) : 0}%
+                      </span>
+                    );
+                  })()}
                 </td>
               </tr>
             );
@@ -979,6 +926,7 @@ function RekapTable({ rekapData, siswaInKelas }: { rekapData: Absensi[]; siswaIn
         <span className="flex items-center gap-1.5">
           <span className={`inline-flex items-center justify-center w-5 h-5 rounded text-[10px] font-bold ${statusColors.Alpa}`}>A</span> Alpa
         </span>
+        <span className="ml-auto text-slate-400">% Hadir = (H + S + I) ÷ Total. Alpa dianggap tidak hadir.</span>
       </div>
     </div>
   );
