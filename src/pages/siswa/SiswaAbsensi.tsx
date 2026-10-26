@@ -39,7 +39,9 @@ export default function SiswaAbsensi() {
       if (a.status in counts) counts[a.status as keyof typeof counts]++;
     }
     const total = data.length;
-    return { counts, total };
+    const hadirEfektif = counts.Hadir + counts.Sakit + counts.Izin;
+    const persentaseKehadiran = total > 0 ? (hadirEfektif / total) * 100 : 0;
+    return { counts, total, hadirEfektif, persentaseKehadiran };
   }, [data]);
 
   const pct = (count: number) => (recap.total > 0 ? (count / recap.total) * 100 : 0);
@@ -84,6 +86,20 @@ export default function SiswaAbsensi() {
             <span className="text-slate-500">Total Pertemuan</span>
             <span className="font-bold text-slate-800">{recap.total}</span>
           </div>
+
+          <div className="mt-3 rounded-lg bg-teal-50/70 border border-teal-100 px-4 py-3 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <CalendarCheck className="w-4 h-4 text-teal-600" />
+              <span className="text-sm font-semibold text-teal-800">Persentase Kehadiran</span>
+            </div>
+            <span className={`text-base font-bold ${recap.persentaseKehadiran >= 80 ? "text-emerald-700" : recap.persentaseKehadiran >= 50 ? "text-amber-700" : "text-rose-700"}`}>
+              {recap.persentaseKehadiran.toFixed(1)}%
+            </span>
+          </div>
+
+          <p className="mt-2 text-xs text-slate-400">
+            Dihitung dari (Hadir + Sakit + Izin) ÷ Total Pertemuan. Alpa dianggap tidak hadir.
+          </p>
         </div>
       )}
 
