@@ -48,7 +48,8 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     headers: { ...authHeaders(isFormData), ...(options.headers || {}) },
   });
 
-  if (!res.ok && res.status !== 404) {
+  const isReadRequest = !options.method || options.method === "GET";
+  if (!res.ok && (res.status !== 404 || !isReadRequest)) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error || `Request gagal (${res.status})`);
   }
@@ -269,13 +270,30 @@ export const api = {
   // ============================================================
   // NILAI
   // ============================================================
-  async listNilai(params?: { search?: string; page?: number; tahun_ajaran_id?: string; semester?: string }): Promise<ListResponse<Nilai>> {
+  async listNilai(params?: { search?: string; page?: number; per_page?: number; tahun_ajaran_id?: string; semester?: string }): Promise<ListResponse<Nilai>> {
     const q = new URLSearchParams();
     if (params?.search) q.set("search", params.search);
     if (params?.page) q.set("page", String(params.page));
+    if (params?.per_page) q.set("per_page", String(params.per_page));
     if (params?.tahun_ajaran_id) q.set("tahun_ajaran_id", params.tahun_ajaran_id);
     if (params?.semester) q.set("semester", params.semester);
     return request(`/nilai?${q.toString()}`);
+  },
+
+  async listAllNilai(params?: { tahun_ajaran_id?: string; semester?: string }): Promise<ListResponse<Nilai>> {
+    const perPage = 1000;
+    let page = 1;
+    let allData: Nilai[] = [];
+    let total = 0;
+    for (;;) {
+      const res = await this.listNilai({ ...params, page, per_page: perPage });
+      allData = allData.concat(res.data);
+      total = res.total || allData.length;
+      if (allData.length >= total || res.data.length < perPage) break;
+      page++;
+      if (page > 50) break;
+    }
+    return { data: allData, total, page: 1, perPage: allData.length };
   },
 
   async createNilai(data: Partial<Nilai>): Promise<{ data: Nilai }> {
