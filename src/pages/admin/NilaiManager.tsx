@@ -44,7 +44,11 @@ function getGradeLabel(nilai: number): string {
 export default function NilaiManager() {
   const { selectedTahunAjaranId, selectedSemester, tahunAjaranList } = useTahunAjaran();
   const tahunAjaranMap = new Map(tahunAjaranList.map((t) => [t.id, t.nama]));
-  const activeTahunAjaranNama = tahunAjaranMap.get(selectedTahunAjaranId) || "";
+  const [filterTahunAjaranId, setFilterTahunAjaranId] = useState<string | null>(null);
+  const [filterSemester, setFilterSemester] = useState<string | null>(null);
+  const viewTahunAjaranId = filterTahunAjaranId ?? selectedTahunAjaranId;
+  const viewSemester = filterSemester ?? selectedSemester;
+  const activeTahunAjaranNama = tahunAjaranMap.get(viewTahunAjaranId) || "";
   const [data, setData] = useState<Nilai[]>([]);
   const [siswaList, setSiswaList] = useState<Siswa[]>([]);
   const [mapelList, setMapelList] = useState<MataPelajaran[]>([]);
@@ -67,7 +71,7 @@ export default function NilaiManager() {
     setLoading(true);
     setError("");
     Promise.all([
-      api.listNilai({ tahun_ajaran_id: selectedTahunAjaranId, semester: selectedSemester }),
+      api.listAllNilai({ tahun_ajaran_id: viewTahunAjaranId, semester: viewSemester }),
       api.listSiswa(),
       api.listMataPelajaran(),
       api.listKelas(),
@@ -80,7 +84,7 @@ export default function NilaiManager() {
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
-  }, [selectedTahunAjaranId, selectedSemester]);
+  }, [viewTahunAjaranId, viewSemester]);
 
   useEffect(() => {
     const t = setTimeout(fetchData, 300);
@@ -182,7 +186,7 @@ export default function NilaiManager() {
       setFormError("Siswa dan mata pelajaran wajib diisi");
       return;
     }
-    if (!selectedTahunAjaranId) {
+    if (!viewTahunAjaranId) {
       setFormError("Pilih tahun ajaran di header terlebih dahulu");
       return;
     }
@@ -204,8 +208,8 @@ export default function NilaiManager() {
         jenis_nilai: form.jenis_nilai,
         nilai: nilaiNum,
         nilai_ke: nilaiKeInt,
-        semester: selectedSemester,
-        tahun_ajaran_id: selectedTahunAjaranId || null,
+        semester: viewSemester,
+        tahun_ajaran_id: viewTahunAjaranId || null,
       };
       if (editing) {
         await api.updateNilai(editing.id, payload);
@@ -239,7 +243,7 @@ export default function NilaiManager() {
   const formSiswaOptions = kelasFilter ? filteredSiswa : siswaList;
 
   const handleDownloadExcel = () => {
-    const periodeLabel = `${selectedSemester} ${activeTahunAjaranNama}`.trim();
+    const periodeLabel = `${viewSemester} ${activeTahunAjaranNama}`.trim();
 
     if (viewMode === "pivot") {
       const headers = ["Nama Siswa", "Kelas", "Jml Nilai"];
@@ -336,6 +340,29 @@ export default function NilaiManager() {
                   {k.nama_kelas}
                 </option>
               ))}
+            </select>
+          </div>
+          <div className="sm:w-44">
+            <select
+              value={viewTahunAjaranId}
+              onChange={(e) => setFilterTahunAjaranId(e.target.value)}
+              className="input-field"
+            >
+              {tahunAjaranList.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.nama}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="sm:w-36">
+            <select
+              value={viewSemester}
+              onChange={(e) => setFilterSemester(e.target.value)}
+              className="input-field"
+            >
+              <option value="Ganjil">Ganjil</option>
+              <option value="Genap">Genap</option>
             </select>
           </div>
           <div className="relative sm:w-44">
@@ -605,9 +632,9 @@ export default function NilaiManager() {
               <label className="input-label">Periode</label>
               <div className="input-field bg-slate-50 text-slate-600 flex items-center gap-2">
                 <CalendarRange className="w-4 h-4 text-slate-400" />
-                <span className="font-medium">{selectedSemester} — {activeTahunAjaranNama || "Belum dipilih"}</span>
+                <span className="font-medium">{viewSemester} — {activeTahunAjaranNama || "Belum dipilih"}</span>
               </div>
-              <p className="text-xs text-slate-400 mt-1">Mengikuti periode aktif di header</p>
+              <p className="text-xs text-slate-400 mt-1">Mengikuti periode yang dipilih di filter atas</p>
             </div>
           </div>
 
