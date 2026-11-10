@@ -949,7 +949,7 @@ Deno.serve(async (req: Request) => {
           if (error) return jsonResponse({ error: error.message }, 500);
           return jsonResponse({ data });
         } else {
-          let query = supabase.from(table).select("*");
+          let query = supabase.from(table).select("*", { count: "exact" });
           if (!isAdmin) {
             if (table === "siswa") {
               query = query.eq("id", user.user_id);
@@ -1005,12 +1005,12 @@ Deno.serve(async (req: Request) => {
           if (isAdmin && table === "penugasan") {
             query = supabase.from(table).select("*, kelas:kelas_id(id, nama_kelas, tingkat), mata_pelajaran:mata_pelajaran_id(id, nama)");
           }
-          if (table === "catatan_buruk") {
+          if (isAdmin && table === "catatan_buruk") {
             query = supabase.from(table).select("*, siswa:siswa_id(id, nama, nisn, kelas_id)");
           }
 
           const page = parseInt(new URL(req.url).searchParams.get("page") || "1");
-          const perPage = parseInt(new URL(req.url).searchParams.get("per_page") || "1000");
+          const perPage = parseInt(new URL(req.url).searchParams.get("per_page") || "10000");
           const search = new URL(req.url).searchParams.get("search") || "";
           const kelasFilter = new URL(req.url).searchParams.get("kelas_id") || "";
 
