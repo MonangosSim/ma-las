@@ -3,7 +3,8 @@ import { api } from "../../api";
 import type { Nilai } from "../../types";
 import { PageHeader, LoadingState, ErrorState, EmptyState } from "../../components/UIStates";
 import { useTahunAjaran } from "../../context/TahunAjaranContext";
-import { CalendarRange } from "lucide-react";
+import { CalendarRange, Download } from "lucide-react";
+import * as XLSX from "xlsx";
 
 function getGradeColor(nilai: number): string {
   if (nilai >= 90) return "bg-emerald-100 text-emerald-700";
@@ -36,9 +37,37 @@ export default function SiswaNilai() {
       .finally(() => setLoading(false));
   }, [selectedTahunAjaranId, selectedSemester]);
 
+  const handleDownloadExcel = () => {
+    const periodeLabel = `${selectedSemester} ${tahunAjaranList.find((t) => t.id === selectedTahunAjaranId)?.nama || ""}`.trim();
+    const sorted = [...data].sort((a, b) => {
+      const ka = a.nilai_ke ?? 999999;
+      const kb = b.nilai_ke ?? 999999;
+      return ka - kb;
+    });
+    const headers = ["Mata Pelajaran", "Jenis", "Nilai Ke", "Nilai", "Grade"];
+    const rows = sorted.map((n) => {
+      const nilaiNum = Number(n.nilai);
+      return [n.mata_pelajaran, n.jenis_nilai, n.nilai_ke ?? "-", nilaiNum, getGradeLabel(nilaiNum)];
+    });
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Nilai");
+    XLSX.writeFile(wb, `Nilai_${periodeLabel.replace(/\s+/g, "_")}.xlsx`);
+  };
+
   return (
     <div>
-      <PageHeader title="Riwayat Nilai" subtitle="Daftar nilai akademik anda" />
+      <PageHeader title="Riwayat Nilai" subtitle="Daftar nilai akademik anda" actions={
+        <button
+          onClick={handleDownloadExcel}
+          className="btn-secondary"
+          disabled={loading || data.length === 0}
+          title="Download ke Excel"
+        >
+          <Download className="w-4 h-4" />
+          Excel
+        </button>
+      } />
 
       <div className="card mb-4 p-3">
         <div className="flex flex-wrap items-center gap-2">
